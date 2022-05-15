@@ -1,0 +1,24 @@
+{
+  "name": "itp-cabinetsofwonder-coral-individual",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/PaulineOC/ITP-CabinetsOfWonder-Coral-Individual.git"
+  },
+  "author": "PaulineOC",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/PaulineOC/ITP-CabinetsOfWonder-Coral-Individual/issues"
+  },
+  "homepage": "https://github.com/PaulineOC/ITP-CabinetsOfWonder-Coral-Individual#readme",
+  "dependencies": {
+    "express": "^4.18.1",
+    "mqtt": "^4.3.7",
+    "socket.io": "^4.5.0"
+  }
+}
