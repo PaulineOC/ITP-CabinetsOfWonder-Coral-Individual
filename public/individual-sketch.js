@@ -10,6 +10,12 @@ const STATES = {
   END: "END",
 }; 
 let GameState = STATES.START;
+
+const CORAL_TYPE = {
+  FUNGIA_SCUTARIA: "FUNGIA_SCUTARIA",
+  ACROPORA_LORIPES: "ACROPORA_LORIPES",
+  ACROPORA_MILLEPORA: "ACROPORA_MILLEPORA"
+}; 
       
 let ctx;
 //Image resources:
@@ -18,7 +24,7 @@ let welcomeScreen;
 
 //Videos
 let SRVidPathLowRes = 'Assets/SR-LR-S1.mp4';
-let SRVidPathHighRes = 'Assets/SR-H-Test.mp4';
+let SRVidPathHighRes = 'Assets/st-2.mp4';
 
 let SRVid;
 let hasLoadedSRVid;
@@ -26,7 +32,7 @@ let SRVidDom;
 let isSRVidPlaying;
 
 let PRVidPathLowRes = 'Assets/PR-LR.mp4';
-let PRVidPathHighRes = 'Assets/PR-H.mp4';
+let PRVidPathHighRes = 'Assets/ph-2.mp4';
 
 let PRVid;
 let hasLoadedPRVid;
@@ -35,7 +41,7 @@ let isPRVidPlaying;
 
 let hasStarted = false;
 let timer;
-let timeLeft = 10;
+let timeLeft = 30;
 
 var serial;          // variable to hold an instance of the serialport library
 var portName = '/dev/tty.usbmodem14101'; // fill in your serial port name here
@@ -54,7 +60,7 @@ const topic3 = 'CoralCustomization';
 
 function preload() {
   oceanBg = loadImage('Assets/ocean.png');
-  welcomeScreen = loadImage('Assets/Frame-2.png');
+  welcome = loadImage('Assets/welcome.png');
 
   //TODO: replace with API call
   const currLocation = window.location.pathname;
@@ -89,7 +95,6 @@ const SRPReloadFn = () => {
 
       SRVidDom.loop = true;
       SRVidDom.pause();
-      image(SRVid, 0,0, SRVid.width, SRVid.height);
       
     });
   SRVid.size(window.innerWidth, window.innerHeight);
@@ -113,7 +118,7 @@ const PRPReloadFn = () => {
 
       PRVidDom.loop = true;
       PRVidDom.pause();
-      image(PRVid, 0,0, PRVid.width, PRVid.height);
+
       
     });
   PRVid.size(window.innerWidth, window.innerHeight);
@@ -142,15 +147,15 @@ function setupMQTT(){
 
   // connect to the MQTT broker:
     client.connect(
-        {
-            onSuccess: () => {    
-              client.subscribe(topic);
-              client.subscribe(topic2);
-            },       // callback function for when you connect
-            userName: MQTTCreds.userName,   // username
-            password: MQTTCreds.password,   // password
-            useSSL: true                // use SSL
-        }
+      {
+          onSuccess: () => {    
+            client.subscribe(topic);
+            client.subscribe(topic2);
+          },       // callback function for when you connect
+          userName: MQTTCreds.userName,   // username
+          password: MQTTCreds.password,   // password
+          useSSL: true                // use SSL
+      }
     );
 };
 
@@ -204,10 +209,12 @@ const turnOnVideo = () => {
   switch(STATION_TYPE){
       case RESTORATION_TYPE.PHYSICAL: 
         console.log("playing physical");
+        PRVidDom.muted = true;
         PRVidDom.play();
       break;
       case RESTORATION_TYPE.STRUCTURAL: 
         console.log("playing structural");
+        SRVidDom.muted = true;
         SRVidDom.play();
       break;
   }
@@ -258,7 +265,7 @@ const videoIsDoneCallback = () => {
   sendMqttMessage(topic2);
   GameState = STATES.END;
 
-  timer = setInterval(runTimer, 1000);
+  timer = setInterval(runTimer, timeLeft * 1000);
 };
 
 const runTimer = () => {
@@ -273,20 +280,20 @@ const resetInteractive = () => {
   GameState = STATES.START;
   isSRVidPlaying = false;
   isPRVidPlaying = false;
-  timeLeft = 10;
+  timeLeft = 30;
 };
 
 function draw() {
-  let currVid = STATION_TYPE ===  RESTORATION_TYPE.STRUCTURAL ? SRVid : PRVid; 
-
+  let currVid = STATION_TYPE ===  RESTORATION_TYPE.STRUCTURAL ? SRVid : PRVid;
   switch(GameState){
     case STATES.END:
       image(oceanBg, 0, 0, window.innerWidth, window.innerHeight);
       drawTimerText();
       break;
     case STATES.START:
-    case STATES.PLAYING: 
-      image(currVid, 0,0, currVid.width, currVid.height);
+      image(welcome, 0,0, window.innerWidth, window.innerHeight);
+    case STATES.PLAYING:
+      image(currVid, 0,0, window.innerWidth, window.innerHeight);
       break;
   }
 }
@@ -325,9 +332,9 @@ function keyPressed() {
 
 // MQTT: 
 const onMQTTMessageArrived = (message) => {
-  console.log("Message has arrived");
   const actualData = JSON.parse(message.payloadString);
-  if(actualData.state === "ARDUINO-ON"){
+  console.log("Message has arrived: ", actualData);
+  if(actualData == 1 && !isSRVidPlaying && !isPRVidPlaying){
     turnOnVideo();
   }
 };
@@ -338,6 +345,7 @@ function sendMqttMessage(topicDestination) {
 
         let msg = `${STATION_TYPE}-HI`;
         const finalData = {
+          coralType: CORAL_TYPE.FUNGIA_SCUTARIA,
           name: "Bob",
           red: "255",
           blue: "0",
