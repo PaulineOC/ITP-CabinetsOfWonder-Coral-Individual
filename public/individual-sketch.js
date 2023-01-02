@@ -1,68 +1,80 @@
-const RESTORATION_TYPE = {
-  PHYSICAL: "PHYSICAL",
-  STRUCTURAL: "STRUCTURAL"
-}; 
 let STATION_TYPE = null;
-
-const STATES = {
-  START: "START",
-  PLAYING: "PLAYING",
-  END: "END",
-}; 
 let GameState = STATES.START;
+let userCoral = null;
 
-const CORAL_TYPE = {
-  FUNGIA_SCUTARIA: "FUNGIA_SCUTARIA",
-  ACROPORA_LORIPES: "ACROPORA_LORIPES",
-  ACROPORA_MILLEPORA: "ACROPORA_MILLEPORA"
-}; 
-      
+const serial = new p5.WebSerial();
+let portButton;
+
 let ctx;
+
 //Image resources:
 let oceanBg;
 let welcomeScreen;
 
-//Videos
-let SRVidPathLowRes = 'Assets/SR-LR-S1.mp4';
-let SRVidPathHighRes = 'Assets/st-2.mp4';
+let bgSound;
 
+//Videos: 
 let SRVid;
 let hasLoadedSRVid;
 let SRVidDom;
 let isSRVidPlaying;
-
-let PRVidPathLowRes = 'Assets/PR-LR.mp4';
-let PRVidPathHighRes = 'Assets/ph-2.mp4';
 
 let PRVid;
 let hasLoadedPRVid;
 let PRVidDom;
 let isPRVidPlaying;
 
-let hasStarted = false;
-let timer;
-let timeLeft = 30;
+let hasVideoStarted = false;
 
-var serial;          // variable to hold an instance of the serialport library
-var portName = '/dev/tty.usbmodem14101'; // fill in your serial port name here
-var inData;                            // for incoming serial data
-var outByte = 0;
-
-
-// MQTT client:
-let client;
-
-// topic to subscribe to when you connect:
-const topic = 'ArduinoMessage';
-const topic2 = 'IndividualVideoDone';
-const topic3 = 'CoralCustomization';
-
+let hasTimerStarted = false;
+let timeLeft = 10;
 
 function preload() {
   oceanBg = loadImage('Assets/ocean.png');
   welcome = loadImage('Assets/welcome.png');
 
-  //TODO: replace with API call
+  soundFormats('mp3');
+  bgSound = loadSound(soundPath);
+  bgSound.setVolume(5);
+
+  videoPreload();
+  
+};
+
+function setup() {
+  console.log("Setup");
+  ctx = createCanvas(window.innerWidth, window.innerHeight);
+  setupMQTT();
+
+  setupWebSerial(makePortButton, onWebSerialRead);
+}
+
+function draw() {
+  let currVid = STATION_TYPE ===  RESTORATION_TYPE.STRUCTURAL ? SRVid : PRVid;
+  switch(GameState){
+    case STATES.START:
+      image(oceanBg, 0,0, window.innerWidth, window.innerHeight);
+      drawBeginningText();
+      break;
+    case STATES.PLAYING:
+      image(currVid, 0,0, window.innerWidth, window.innerHeight);
+      break;
+    case STATES.END:
+      image(oceanBg, 0, 0, window.innerWidth, window.innerHeight);
+      drawTimerText();
+
+      if(hasTimerStarted){
+        let fCount = frameCount;
+        timer(frameCount);
+      }
+      break;
+  }
+}
+
+
+/* PRELOAD */
+const videoPreload = () => {
+
   const currLocation = window.location.pathname;
   if(currLocation.includes("physical")){
     STATION_TYPE = RESTORATION_TYPE.PHYSICAL;
@@ -73,7 +85,6 @@ function preload() {
     STATION_TYPE = RESTORATION_TYPE.STRUCTURAL;
     SRPReloadFn();
   }
-
 };
 
 const SRPReloadFn = () => {
@@ -118,106 +129,43 @@ const PRPReloadFn = () => {
 
       PRVidDom.loop = true;
       PRVidDom.pause();
-
       
     });
   PRVid.size(window.innerWidth, window.innerHeight);
 };
 
-function setupMQTT(){
-  // MQTT client details:
-  let MQTTBroker = {
-      hostname: `itp-cow-coral.cloud.shiftr.io/mqtt`,
-      port: `1883`
-  };
-  // client credentials:
-  let MQTTCreds = {
-      clientID: STATION_TYPE === RESTORATION_TYPE.STRUCTURAL ? 'Individual-Structural' : 'Individual-Physical',
-      userName: 'itp-cow-coral',
-      password: 'KfJGdpgNyNgxeDJX'
-  }
-    //MQTT - Private:
-
-  client = new Paho.MQTT.Client(MQTTBroker.hostname, Number(MQTTBroker.port), MQTTCreds.clientID);
-    // set callback handlers for the client:
-    client.onConnectionLost = () => {
-      console.log("lost connection");
-    };
-    client.onMessageArrived = onMQTTMessageArrived;
-
-  // connect to the MQTT broker:
-    client.connect(
-      {
-          onSuccess: () => {    
-            client.subscribe(topic);
-            client.subscribe(topic2);
-          },       // callback function for when you connect
-          userName: MQTTCreds.userName,   // username
-          password: MQTTCreds.password,   // password
-          useSSL: true                // use SSL
-      }
-    );
-};
-
-function setup() {
-  console.log("Setup");
-  ctx = createCanvas(window.innerWidth, window.innerHeight);
-  setupMQTT();
-
-  //OLD Serial Port
-
-  /**
-
-  serial = new p5.SerialPort();    // make a new instance of the serialport library
-  
-  serial.on('data', serialEvent);  // callback for when new data arrives
-  serial.on('error', serialError); // callback for errors
-  serial.open(portName); 
-
-  serial.on('connected', ()=>{
-    console.log("connected to port!");
-  });
-
-  serial.on("open", (data) => {
-    console.log("open port");
-  });
-  **/   
+/* START */
+function drawBeginningText(){
+  textSize(FONT_SIZE);
+  const phrase1 = `Welcome to the Coral Restoration Interactive`;
+  const phrase1Width = textWidth(phrase1);
+  const phrase2 = `Place your coral on the platform to learn about coral restoration`;
+  const phrase2Width = textWidth(phrase2);
+  text(phrase1, window.innerWidth/2-phrase1Width/2, window.innerHeight/2-FONT_SIZE);
+  text(phrase2, window.innerWidth/2-phrase2Width/2, window.innerHeight/2+FONT_SIZE);
 }
 
-function serialEvent() {
-  // read a byte from the serial port:
-  var inByte = serial.readString();
-  //var inByte = serial.readStringUntil("\r\n");
-  //console.log(inByte);
-  // store it in a global variable:
-  inData = inByte;
-  if(inByte == "1" && !hasStarted){
-    console.log("Turn on video");
-    hasStarted = true;
-    turnOnVideo();
-  }
-  serial.write('r');
-}
-
-function serialError(err) {
-  console.log('Something went wrong with the serial port. ' + err);
-}
-
+/* PLAYING */
 const turnOnVideo = () => {
   GameState = STATES.PLAYING;
-  let canvas = document.getElementsByTagName("canvas")[0];
+  // let canvas = document.getElementsByTagName("canvas")[0];
   switch(STATION_TYPE){
       case RESTORATION_TYPE.PHYSICAL: 
-        console.log("playing physical");
+        console.log("Starting video - physical");
         PRVidDom.muted = true;
+        PRVidDom.currentTime = 0;
         PRVidDom.play();
       break;
       case RESTORATION_TYPE.STRUCTURAL: 
-        console.log("playing structural");
+        console.log("Starting video - structural");
         SRVidDom.muted = true;
+        SRVidDom.currentTime = 0;
+        console.log('Current time: ',SRVidDom.currentTime);
         SRVidDom.play();
       break;
   }
+
+  bgSound.loop();
 }
 
 const videoIsPlaying = () => {
@@ -249,11 +197,10 @@ const videoIsPlaying = () => {
         }
       break;
   }
-
 };
 
 const videoIsDoneCallback = () => {
-
+  bgSound.pause();
   switch(STATION_TYPE){
       case RESTORATION_TYPE.PHYSICAL: 
         isPRVidPlaying = false;
@@ -262,104 +209,103 @@ const videoIsDoneCallback = () => {
         isSRVidPlaying = false;
       break;
   }
-  sendMqttMessage(topic2);
-  GameState = STATES.END;
 
-  timer = setInterval(runTimer, timeLeft * 1000);
-};
+  console.log('Video is done');
+  console.log(userCoral);
 
-const runTimer = () => {
-  timeLeft--;
-  if(timeLeft <= 0 ){
-    clearInterval(timer);
-    resetInteractive();
+  if(userCoral){
+    sendMqttMessage(userCoral);
   }
+
+  GameState = STATES.END;
+  hasTimerStarted = true;
 };
 
-const resetInteractive = () => {
-  GameState = STATES.START;
-  isSRVidPlaying = false;
-  isPRVidPlaying = false;
-  timeLeft = 30;
-};
-
-function draw() {
-  let currVid = STATION_TYPE ===  RESTORATION_TYPE.STRUCTURAL ? SRVid : PRVid;
-  switch(GameState){
-    case STATES.END:
-      image(oceanBg, 0, 0, window.innerWidth, window.innerHeight);
-      drawTimerText();
-      break;
-    case STATES.START:
-      image(welcome, 0,0, window.innerWidth, window.innerHeight);
-    case STATES.PLAYING:
-      image(currVid, 0,0, window.innerWidth, window.innerHeight);
-      break;
+/* END */
+const timer = (frameCount) => {
+  if (frameCount % 60 == 0 && timeLeft > 0) { // if the frameCount is divisible by 60, then a second has passed. it will stop at 0
+    timeLeft --;
+  }
+  else if(timeLeft <= 0){
+    resetInteractive();
   }
 }
 
+/* RESET */ 
+const resetInteractive = () => {
+  console.log('Resetting Interactive');
+  GameState = STATES.START;
+  hasTimerStarted = false;
+  timeLeft = 10;
+  bgSound.pause();
+  resetVideo();
+};
+
+const resetVideo = () => {
+  switch(STATION_TYPE){
+    case STATION_TYPE.STRUCTURAL: 
+      SRVidDom.pause();
+      // SRVidDom.currentTime = 0;
+      break;
+    case STATION_TYPE.PHYSICAL: 
+      PRVidDom.pause();
+      // PRVidDom.currentTime = 0;
+      break;
+  }
+  isSRVidPlaying = false;
+  isPRVidPlaying = false;
+  hasVideoStarted = false;
+}
+
 function drawTimerText(){
-  const fontSize = 50;
-  textSize(fontSize);
+  textSize(FONT_SIZE);
   const phrase1 = "Resetting in:";
   const phrase1Width = textWidth(phrase1);
   const phrase2 = `${timeLeft} seconds`;
   const phrase2Width = textWidth(phrase2);
 
-  text(phrase1, window.innerWidth/2-phrase1Width/2, window.innerHeight/2-fontSize);
-  text(phrase2, window.innerWidth/2-phrase2Width/2, window.innerHeight/2+fontSize);
+  text(phrase1, window.innerWidth/2-phrase1Width/2, window.innerHeight/2-FONT_SIZE);
+  text(phrase2, window.innerWidth/2-phrase2Width/2, window.innerHeight/2+FONT_SIZE);
 }
+
+
+/* KEY CODES */
 
 function keyPressed() {
   if (keyCode === UP_ARROW) {
-    console.log("Up pressed (fake switch)");
+    console.log("UP pressed: playing video");
     turnOnVideo();
   }
-  else if (keyCode === BACKSPACE) {
-    console.log("BACKSPACE pressed");
-      serial.write("g");
-  }
-  else if(keyCode=== LEFT_ARROW){
-    console.log("sending ARDUINO MQTT Test message");
-    sendMqttMessage(topic);
-  }
 
-  else if(keyCode=== RIGHT_ARROW){
-    console.log("Sending p5 -> p5 MQTT Test message");
-    sendMqttMessage(topic2);
-  }
 }
 
-// MQTT: 
-const onMQTTMessageArrived = (message) => {
-  const actualData = JSON.parse(message.payloadString);
-  console.log("Message has arrived: ", actualData);
-  if(actualData == 1 && !isSRVidPlaying && !isPRVidPlaying){
-    turnOnVideo();
+/* WEB SERIAL */
+
+function onWebSerialRead(){
+  const inData =  serial.readString();
+  console.log(`Receiving Webserial Data: ${inData}`);
+
+  //Turn on Video 
+  if((inData == "1" || inData == "01") && !hasVideoStarted && GameState === STATES.START){
+      turnOnVideo();
+      hasVideoStarted = true;
+      return;
   }
-};
 
-function sendMqttMessage(topicDestination) {
-    // if the client is connected to the MQTT broker:
-    if (client.isConnected()) {
+  if(inData == "0" && hasVideoStarted && GameState === STATES.PLAYING ){
+    resetInteractive();
+    return;
+  }
 
-        let msg = `${STATION_TYPE}-HI`;
-        const finalData = {
-          coralType: CORAL_TYPE.FUNGIA_SCUTARIA,
-          name: "Bob",
-          red: "255",
-          blue: "0",
-          green: "255",
-          state: "VID-DONE",
-          type: STATION_TYPE,
-        };
-        const finalDataString = JSON.stringify(finalData);
-        // start an MQTT message:
-        message = new Paho.MQTT.Message(finalDataString);
-        // choose the destination topic:
-        message.destinationName = topicDestination;
-        // send it:
-        client.send(message);
-    }
 }
 
+function makePortButton() {
+  // create and position a port chooser button:
+  portButton = createButton("choose port");
+  portButton.position(10, 10);
+  // give the port button a mousepressed handler:
+  portButton.mousePressed(()=>{
+    if (portButton) portButton.show();
+    serial.requestPort();
+  });
+}
