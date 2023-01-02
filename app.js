@@ -13,10 +13,8 @@ app.use('/physical', express.static(path.join(__dirname, 'public')));
 
 const socketIO = require("socket.io");
 
-const server = app.listen(3000, () => {
-	console.log("listening on port 3000!");
+const server = app.listen(3001, () => {
+	console.log("listening on port 3001!");
 });
 
 const io = socketIO(server);
-
-
