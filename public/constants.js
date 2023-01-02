@@ -46,9 +46,9 @@ const FONT_SIZE = 50;
 
 const testVidPath = `Assets/Up.mp4`;
 const SRVidPathLowRes = 'Assets/SR-LR-S1.mp4';
-const SRVidPathHighRes = 'Assets/st-2.mp4';
+const SRVidPathHighRes = 'Assets/st-h-3.mp4';
 //const SRVidPathHighRes = testVidPath;
 
 const PRVidPathLowRes = 'Assets/PR-LR.mp4';
-const PRVidPathHighRes = 'Assets/ph-2.mp4';
+const PRVidPathHighRes = 'Assets/ph-h-3.mp4';
 const soundPath = `Assets/underwater.mp3`;
